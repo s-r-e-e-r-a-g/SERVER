@@ -20,7 +20,7 @@ app.use('/messages', messageRouter);
 app.use('/group', chatRouter);
 
 app.get('/',(req, res)=>{
-    res.send("API Working");
+    res.send("ChatVault API Working");
 })
 
 server.listen(PORT,()=>{

@@ -1,5 +1,6 @@
 import cloudinary from "../config/cloudinary.js";
 import Chat from "../models/chatModel.js";
+import GroupChat from "../models/groupChatModel.js";
 import Message from "../models/messageModel.js";
 import User from "../models/userModel.js";
 
@@ -105,3 +106,74 @@ export const getProfilePic = async (req, res) => {
         res.status(500).json({ success: false, message: e.message });
     }
 }
+
+export const deleteAccount = async (req, res) => {
+    try {
+        const userId = req.params.userId;
+
+        if (req.user.id !== userId) {
+            return res.status(403).json({ error: 'You can only delete your own account.' });
+        }
+
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found.' });
+        }
+
+        // Delete all private messages sent/received by the user
+        await Message.deleteMany({ senderId: userId });
+        await Message.deleteMany({ receiverId: userId });
+
+        // Remove user from private chats
+        await Chat.updateMany(
+            { members: userId },
+            { $pull: { members: userId } }
+        );
+
+        // Delete private chats where no participants are left
+        await Chat.deleteMany({ members: { $size: 0 } });
+
+        // Remove the user from group chats but keep their messages
+        await GroupChat.updateMany(
+            { members: userId },
+            { $pull: { members: userId } }
+        );
+
+        // Delete groups where the user is the admin
+        await GroupChat.deleteMany({ admin: userId });
+
+        // Delete the user account
+        await User.findByIdAndDelete(userId);
+
+        res.json({ message: 'User account deleted. Group messages retained, but user removed from groups.' });
+    } catch (error) {
+        console.error('Error deleting user:', error);
+        res.status(500).json({ error: 'Internal server error.' });
+    }
+};
+
+export const deleteChat = async (req, res) => {
+    try {
+        const { userId, chatId } = req.params;
+
+        // Find the chat where both users exist
+        const chat = await Chat.findOne({ members: { $all: [userId, chatId] } });
+
+        if (!chat) {
+            return res.status(404).json({ success: false, message: "Chat not found" });
+        }
+
+        // Remove only the current user from chat members
+        chat.members = chat.members.filter(member => member.toString() !== userId);
+        await chat.save();
+
+        res.status(200).json({ success: true, message: "Chat deleted for the current user only" });
+
+    } catch (error) {
+        console.error("Error deleting chat:", error);
+        res.status(500).json({ success: false, message: "Server error" });
+    }
+};
+
+
+
