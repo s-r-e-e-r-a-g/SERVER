@@ -2,6 +2,7 @@ import express from "express";
 import { protectRoute } from "../middlewares/authMiddleware.js";
 import GroupChat from "../models/groupChatModel.js";
 import GroupMessage from "../models/groupMessageModel.js";
+import User from "../models/userModel.js";
 
 const router = express.Router();
 
@@ -157,6 +158,113 @@ router.put('/mark-read/:groupId', protectRoute, async (req, res) => {
         res.status(500).json({ error: "Failed to mark messages as read" });
     }
 });
+
+router.post("/add/:groupId", protectRoute, async (req, res) => {
+    try {
+      const { groupId } = req.params;
+      const { userId } = req.body;
+  
+      if (!userId) {
+        return res.status(400).json({ error: "User ID is required" });
+      }
+  
+      const group = await GroupChat.findById(groupId);
+      if (!group) {
+        return res.status(404).json({ error: "Group not found" });
+      }
+      // Check if the requester is an admin
+      if (group.admin.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ error: "Only admins can add members" });
+      }
+  
+      // Check if user is already a member
+      if (group.members.includes(userId)) {
+        return res.status(400).json({ error: "User is already in the group" });
+      }
+  
+      // Add user to group
+      group.members.push(userId);
+      await group.save();
+  
+      const newUser = await User.findById(userId).select("name profilePic");
+  
+      res.status(200).json({ message: "User added successfully", newUser });
+    } catch (error) {
+      console.error("Error adding member:", error);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  });
+
+  router.post("/remove/:groupId", protectRoute, async (req, res) => {
+    try {
+      const { groupId } = req.params;
+      const { memberId } = req.body;
+  
+      if (!memberId) {
+        return res.status(400).json({ error: "User ID is required" });
+      }
+  
+      const group = await GroupChat.findById(groupId);
+      if (!group) {
+        return res.status(404).json({ error: "Group not found" });
+      }
+      console.log(group.admin,"--",req.user._id)
+      // Only admins can remove members
+      if (group.admin.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ error: "Only admins can remove members" });
+      }
+  
+      // Check if user is in the group
+      if (!group.members.includes(memberId)) {
+        return res.status(400).json({ error: "User is not in the group" });
+      }
+  
+      // Remove user from group
+      group.members = group.members.filter((member) => member.toString() !== memberId);
+      await group.save();
+  
+      res.status(200).json({ message: "User removed successfully" });
+    } catch (error) {
+      console.error("Error removing member:", error);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  });
+
+  router.post("/exit/:groupId", protectRoute, async (req, res) => {
+    try {
+      const { groupId } = req.params;
+      const userId = req.user._id; 
+  
+      let group = await GroupChat.findById(groupId);
+      if (!group) return res.status(404).json({ error: "Group not found" });
+  
+      // Check if the user is in the group
+      const isMember = group.members.some(member => member.toString() === userId.toString());
+      if (!isMember) return res.status(400).json({ error: "User is not a member of this group" });
+  
+      // Remove the user from the group
+      group.members = group.members.filter(member => member.toString() !== userId.toString());
+  
+      // If the exiting user is the admin
+      if (group.admin.toString() === userId.toString()) {
+        if (group.members.length > 0) {
+          group.admin = group.members[0]; // Assign the first remaining member as admin
+        } else {
+          // If no members left, delete the group
+          await GroupChat.findByIdAndDelete(groupId);
+          return res.json({ message: "Group deleted as no members were left" });
+        }
+      }
+  
+      await group.save();
+  
+      res.json({ message: "Exited group successfully" });
+    } catch (error) {
+      console.error("Error exiting group:", error);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  });
+  
 
 
 
