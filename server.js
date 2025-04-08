@@ -8,6 +8,18 @@ import messageRouter from './routes/messageRouter.js'
 import {app, server} from './config/socket.js'
 import chatRouter from './routes/groupChatRouter.js'
 
+import cron from 'node-cron';
+import axios from 'axios';
+
+cron.schedule('*/10 * * * *', async () => {
+  try {
+    await axios.get('https://server-6dvd.onrender.com/');
+    console.log('Pinged');
+  } catch (err) {
+    console.error('Self-ping failed:', err.message);
+  }
+});
+
 // const app = express();
 const PORT = process.env.PORT || 5000
 mongodbConnect();
