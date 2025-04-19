@@ -11,7 +11,7 @@ import chatRouter from './routes/groupChatRouter.js'
 import cron from 'node-cron';
 import axios from 'axios';
 
-cron.schedule('*/10 * * * *', async () => {
+cron.schedule('0 12 * * *', async () => {
   try {
     await axios.get('https://server-6dvd.onrender.com/');
     console.log('Pinged');
